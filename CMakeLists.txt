@@ -1,12 +1,12 @@
-cmake_minimum_required(VERSION 2.8.11) # Maybe works with even older versions
+cmake_minimum_required(VERSION 3.1)
 
-project(qmatrixclient)
-enable_language(CXX)
+project(qmatrixclient CXX)
 
 include(CheckCXXCompilerFlag)
+if (NOT WIN32)
+    include(GNUInstallDirs)
+endif(NOT WIN32)
 
-# Find includes in corresponding build directories
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Instruct CMake to run moc automatically when needed.
 set(CMAKE_AUTOMOC ON)
 
@@ -19,26 +19,28 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Setup command line parameters for the compiler and linker
-CHECK_CXX_COMPILER_FLAG("-Wall" WALL_FLAG_SUPPORTED)
-if ( WALL_FLAG_SUPPORTED AND NOT CMAKE_CXX_FLAGS MATCHES "(^| )-Wall($| )")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-endif ( )
-CHECK_CXX_COMPILER_FLAG("-Wpedantic" PEDANTIC_FLAG_SUPPORTED)
-if ( PEDANTIC_FLAG_SUPPORTED AND NOT CMAKE_CXX_FLAGS MATCHES "(^| )pedantic($| )")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wpedantic")
-endif ( )
+if (NOT CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR ".")
+endif()
 
-if ( CMAKE_VERSION VERSION_LESS "3.1" )
-    CHECK_CXX_COMPILER_FLAG("-std=c++11" STD_FLAG_SUPPORTED)
-    if ( STD_FLAG_SUPPORTED )
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-    endif ( STD_FLAG_SUPPORTED )
-else ( CMAKE_VERSION VERSION_LESS "3.1" )
-    set(CMAKE_CXX_STANDARD 11)
-endif ( CMAKE_VERSION VERSION_LESS "3.1" )
+if (NOT CMAKE_INSTALL_BINDIR)
+    set(CMAKE_INSTALL_BINDIR ".")
+endif()
 
-find_package(Qt5 5.2.1 REQUIRED Network Gui)
+if (NOT CMAKE_INSTALL_INCLUDEDIR)
+    set(CMAKE_INSTALL_INCLUDEDIR "include")
+endif()
+
+set(CMAKE_CXX_STANDARD 11)
+
+foreach (FLAG all "" pedantic extra error=return-type no-unused-parameter no-gnu-zero-variadic-macro-arguments)
+    CHECK_CXX_COMPILER_FLAG("-W${FLAG}" WARN_${FLAG}_SUPPORTED)
+    if ( WARN_${FLAG}_SUPPORTED AND NOT CMAKE_CXX_FLAGS MATCHES "(^| )-W?${FLAG}($| )")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W${FLAG}")
+    endif ()
+endforeach ()
+
+find_package(Qt5 5.4.1 REQUIRED Network Gui)
 get_filename_component(Qt5_Prefix "${Qt5_DIR}/../../../.." ABSOLUTE)
 
 message( STATUS )
@@ -55,46 +57,91 @@ message( STATUS )
 
 # Set up source files
 set(libqmatrixclient_SRCS
-   connectiondata.cpp
-   connection.cpp
-   logging.cpp
-   room.cpp
-   user.cpp
-   avatar.cpp
-   settings.cpp
-   events/event.cpp
-   events/eventcontent.cpp
-   events/roommessageevent.cpp
-   events/roommemberevent.cpp
-   events/roomavatarevent.cpp
-   events/typingevent.cpp
-   events/receiptevent.cpp
-   jobs/basejob.cpp
-   jobs/checkauthmethods.cpp
-   jobs/passwordlogin.cpp
-   jobs/sendeventjob.cpp
-   jobs/setroomstatejob.cpp
-   jobs/postreceiptjob.cpp
-   jobs/joinroomjob.cpp
-   jobs/roommessagesjob.cpp
-   jobs/syncjob.cpp
-   jobs/mediathumbnailjob.cpp
+    lib/connectiondata.cpp
+    lib/connection.cpp
+    lib/logging.cpp
+    lib/room.cpp
+    lib/user.cpp
+    lib/avatar.cpp
+    lib/settings.cpp
+    lib/events/event.cpp
+    lib/events/eventcontent.cpp
+    lib/events/roommessageevent.cpp
+    lib/events/roommemberevent.cpp
+    lib/events/roomavatarevent.cpp
+    lib/events/typingevent.cpp
+    lib/events/receiptevent.cpp
+    lib/jobs/basejob.cpp
+    lib/jobs/checkauthmethods.cpp
+    lib/jobs/sendeventjob.cpp
+    lib/jobs/setroomstatejob.cpp
+    lib/jobs/joinroomjob.cpp
+    lib/jobs/postreceiptjob.cpp
+    lib/jobs/roommessagesjob.cpp
+    lib/jobs/syncjob.cpp
+    lib/jobs/mediathumbnailjob.cpp
 )
 
-aux_source_directory(jobs/generated libqmatrixclient_job_SRCS)
+aux_source_directory(lib/jobs/generated libqmatrixclient_job_SRCS)
 
 set(example_SRCS examples/qmc-example.cpp)
 
-add_library(qmatrixclient ${libqmatrixclient_SRCS} ${libqmatrixclient_job_SRCS})
-set_property(TARGET qmatrixclient PROPERTY VERSION "0.1.0")
-set_property(TARGET qmatrixclient PROPERTY SOVERSION 0 )
+add_library(QMatrixClient ${libqmatrixclient_SRCS} ${libqmatrixclient_job_SRCS})
+set(API_VERSION "0.1")
+set_property(TARGET QMatrixClient PROPERTY VERSION "${API_VERSION}.0")
+set_property(TARGET QMatrixClient PROPERTY SOVERSION 0 )
+set_property(TARGET QMatrixClient PROPERTY
+             INTERFACE_QMatrixClient_MAJOR_VERSION ${API_VERSION})
+set_property(TARGET QMatrixClient APPEND PROPERTY
+             COMPATIBLE_INTERFACE_STRING QMatrixClient_MAJOR_VERSION)
 
-target_link_libraries(qmatrixclient Qt5::Core Qt5::Network Qt5::Gui)
+target_include_directories(QMatrixClient PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(QMatrixClient Qt5::Core Qt5::Network Qt5::Gui)
 
 add_executable(qmc-example ${example_SRCS})
-target_link_libraries(qmc-example Qt5::Core qmatrixclient)
+target_link_libraries(qmc-example Qt5::Core QMatrixClient)
+
+# Installation
+
+install(TARGETS QMatrixClient EXPORT QMatrixClientTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(DIRECTORY lib/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h")
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/QMatrixClient/QMatrixClientConfigVersion.cmake"
+    VERSION ${API_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+export(PACKAGE QMatrixClient)
+export(EXPORT QMatrixClientTargets
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/QMatrixClient/QMatrixClientTargets.cmake")
+configure_file(cmake/QMatrixClientConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/QMatrixClient/QMatrixClientConfig.cmake"
+    COPYONLY
+)
+
+set(ConfigFilesLocation "${CMAKE_INSTALL_LIBDIR}/cmake/QMatrixClient")
+install(EXPORT QMatrixClientTargets
+        FILE QMatrixClientTargets.cmake DESTINATION ${ConfigFilesLocation})
+
+install(FILES cmake/QMatrixClientConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/QMatrixClient/QMatrixClientConfigVersion.cmake"
+    DESTINATION ${ConfigFilesLocation}
+)
+# Only available from CMake 3.7; reserved for future use
+#install(EXPORT_ANDROID_MK QMatrixClientTargets DESTINATION share/ndk-modules)
 
 if (WIN32)
-    install (FILES mime/packages/freedesktop.org.xml
-             DESTINATION mime/packages)
+    install(FILES mime/packages/freedesktop.org.xml DESTINATION mime/packages)
 endif (WIN32)
+
+install(TARGETS qmc-example RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
