@@ -13,6 +13,7 @@ BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5Network)
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: cmake >= 3.1
+BuildRequires: opt-gcc6
 
 %description
 %{summary}.
@@ -36,15 +37,20 @@ Requires:   %{name} = %{version}-%{release}
 %setup -q
 
 %build
-%cmake \
-    -DBUILD_SHARED_LIBS=ON \
-    -DCMAKE_INSTALL_INCLUDEDIR=include/libqmatrixclient-qt5
+%define cmake_build %__cmake --build .
+%define cmake_install DESTDIR=%{?buildroot} %__cmake --build . --target install
 
-make %{?_smp_mflags}
+
+%cmake \
+    -DCMAKE_CXX_COMPILER=/opt/gcc6/bin/g++ \
+    -DCMAKE_SHARED_LINKER_FLAGS="-L/opt/gcc6/lib -static-libstdc++" \
+    -DCMAKE_INSTALL_INCLUDEDIR=%{_includedir}/libqmatrixclient-qt5
+
+%cmake_build
 
 %install
 rm -rf %{buildroot}
-%make_install
+%cmake_install
 
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
